@@ -26,4 +26,52 @@ class SimpleStrategy:
         # position: 1=買いシグナル, -1=売りシグナル
         return df[['close', 'short_sma', 'long_sma', 'signal', 'position']]
 
-__all__ = ['SimpleStrategy']
+class RSIStrategy:
+    # RSI（Relative Strength Index）を使ったシンプルな売買ストラテジー
+    # period（デフォルト14）でRSIを計算し、30未満で買い、70超で売りシグナルを出します。
+    def __init__(self, data, period=14, buy_threshold=30, sell_threshold=70):
+        self.data = data
+        self.period = period
+        self.buy_threshold = buy_threshold
+        self.sell_threshold = sell_threshold
+
+    def execute(self):
+        df = pd.DataFrame(self.data)
+        delta = df['close'].diff()
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        avg_gain = gain.rolling(window=self.period, min_periods=self.period).mean()
+        avg_loss = loss.rolling(window=self.period, min_periods=self.period).mean()
+        rs = avg_gain / avg_loss
+        df['rsi'] = 100 - (100 / (1 + rs))
+        df['signal'] = 0
+        df.loc[df['rsi'] < self.buy_threshold, 'signal'] = 1
+        df.loc[df['rsi'] > self.sell_threshold, 'signal'] = -1
+        df['position'] = df['signal'].diff()
+        # position: 1=買いシグナル, -1=売りシグナル
+        return df[['close', 'rsi', 'signal', 'position']]
+
+class MACDStrategy:
+    # MACD（移動平均収束拡散法）を使ったシンプルな売買ストラテジー
+    # 短期EMA（デフォルト12）、長期EMA（デフォルト26）、シグナル線（デフォルト9）
+    # MACDがシグナル線を上抜けたら買い、下抜けたら売りシグナル
+    def __init__(self, data, short_period=12, long_period=26, signal_period=9):
+        self.data = data
+        self.short_period = short_period
+        self.long_period = long_period
+        self.signal_period = signal_period
+
+    def execute(self):
+        df = pd.DataFrame(self.data)
+        df['ema_short'] = df['close'].ewm(span=self.short_period, adjust=False).mean()
+        df['ema_long'] = df['close'].ewm(span=self.long_period, adjust=False).mean()
+        df['macd'] = df['ema_short'] - df['ema_long']
+        df['macd_signal'] = df['macd'].ewm(span=self.signal_period, adjust=False).mean()
+        df['signal'] = 0
+        df.loc[df['macd'] > df['macd_signal'], 'signal'] = 1
+        df.loc[df['macd'] < df['macd_signal'], 'signal'] = -1
+        df['position'] = df['signal'].diff()
+        # position: 1=買いシグナル, -1=売りシグナル
+        return df[['close', 'macd', 'macd_signal', 'signal', 'position']]
+
+__all__ = ['SimpleStrategy', 'RSIStrategy', 'MACDStrategy']
